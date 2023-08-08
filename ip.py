@@ -35,14 +35,23 @@ class IP:
         # TODO: Use a tabela de encaminhamento para determinar o próximo salto
         # (next_hop) a partir do endereço de destino do datagrama (dest_addr).
         # Retorne o next_hop para o dest_addr fornecido.
-
+        
+        ''' Passo 1 '''
         dest = ipaddress.ip_address(dest_addr)
+        
+        l = [] # Lista para desempate
         
         for cidr, next_hop in self.tabela:
             c = ipaddress.ip_network(cidr)
             
+            ''' Passo 3 '''
             if dest in c:
-                return next_hop
+                l.append((c.prefixlen, next_hop))
+        
+        # Escolhe o next_hop com o maior prefixo
+        if len(l) > 0:
+            return max(l)[1]
+            
 
     def definir_endereco_host(self, meu_endereco):
         """
@@ -79,6 +88,8 @@ class IP:
         # TODO: Assumindo que a camada superior é o protocolo TCP, monte o
         # datagrama com o cabeçalho IP, contendo como payload o segmento.
         
+        ''' Passo 2 '''
+        
         # Atributos do cabeçalho IP (13 atributos)
         # https://en.wikipedia.org/wiki/Internet_Protocol_version_4#Header
         
@@ -109,8 +120,7 @@ class IP:
                         (version << 4) + ihl, (dscp << 2) + ecn, total_len, identification, (flags << 13) + frag_offset,
                         ttl, proto, checksum, int(src_addr), int(dst_addr))
         
-        
-        
+        # Monta o datagrama (cabecalho antes do segmento)
         datagrama = cabecalho + segmento 
         
         self.enlace.enviar(datagrama, next_hop)
