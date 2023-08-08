@@ -18,6 +18,24 @@ class IP:
         
         self.tabela = None
 
+    ''' Passo 4 '''
+    # Função auxiliar para montar o cabeçalho IP
+    def montar_cabecalho(self, total_len, ttl, src_addr, dst_addr):
+        src_addr = ipaddress.IPv4Address(src_addr) # Endereço de origem
+        dst_addr = ipaddress.IPv4Address(dst_addr) # Endereço de destino
+        
+        cabecalho = struct.pack('!BBHHHBBHII',
+                        (4 << 4) + 5, (0 << 2) + 0, total_len, 0, (0 << 13) + 0,
+                        ttl, 6, 0, int(src_addr), int(dst_addr))
+        
+        checksum = calc_checksum(cabecalho)
+        
+        cabecalho = struct.pack('!BBHHHBBHII',
+                        (4 << 4) + 5, (0 << 2) + 0, total_len, 0, (0 << 13) + 0,
+                        ttl, 6, checksum, int(src_addr), int(dst_addr))
+        
+        return cabecalho
+
     def __raw_recv(self, datagrama):
         dscp, ecn, identification, flags, frag_offset, ttl, proto, \
            src_addr, dst_addr, payload = read_ipv4_header(datagrama)
@@ -29,6 +47,22 @@ class IP:
             # atua como roteador
             next_hop = self._next_hop(dst_addr)
             # TODO: Trate corretamente o campo TTL do datagrama
+            
+            ''' Passo 4 '''
+            
+            # Decrementa o TTL
+            ttl = ttl-1
+            
+            # Se o TTL for 0, o datagrama é descartado
+            if ttl == 0:
+                return
+    
+            # Monta o cabeçalho IP com o TTL decrementado
+            cabecalho = self.montar_cabecalho(20 + len(datagrama), ttl, src_addr, dst_addr)
+            
+            # Monta o datagrama com o cabeçalho IP e o payload
+            datagrama = cabecalho + payload
+            
             self.enlace.enviar(datagrama, next_hop)
 
     def _next_hop(self, dest_addr):
