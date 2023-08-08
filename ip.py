@@ -20,19 +20,19 @@ class IP:
 
     ''' Passo 4 '''
     # Função auxiliar para montar o cabeçalho IP
-    def montar_cabecalho(self, total_len, ttl, src_addr, dst_addr):
+    def montar_cabecalho(self, total_len, ttl, proto, src_addr, dst_addr):
         src_addr = ipaddress.IPv4Address(src_addr) # Endereço de origem
         dst_addr = ipaddress.IPv4Address(dst_addr) # Endereço de destino
         
         cabecalho = struct.pack('!BBHHHBBHII',
                         (4 << 4) + 5, (0 << 2) + 0, total_len, 0, (0 << 13) + 0,
-                        ttl, 6, 0, int(src_addr), int(dst_addr))
+                        ttl, proto, 0, int(src_addr), int(dst_addr))
         
         checksum = calc_checksum(cabecalho)
         
         cabecalho = struct.pack('!BBHHHBBHII',
                         (4 << 4) + 5, (0 << 2) + 0, total_len, 0, (0 << 13) + 0,
-                        ttl, 6, checksum, int(src_addr), int(dst_addr))
+                        ttl, proto, checksum, int(src_addr), int(dst_addr))
         
         return cabecalho
 
@@ -53,12 +53,41 @@ class IP:
             # Decrementa o TTL
             ttl = ttl-1
             
+            ''' Passo 5 '''
             # Se o TTL for 0, o datagrama é descartado
+            # E é gerada uma mensagem do tipo ICMP Time exceeded que é enviada de volta ao remetente
             if ttl == 0:
+                # Atualiza o next_hop para o endereço de origem do datagrama
+                next_hop = self._next_hop(src_addr)
+                
+                # Montando o cabeçalho IP com os endereços invertidos e com o protocolo ICMP (IPPROTO_ICMP = 1)
+                cabecalho_ip = self.montar_cabecalho(48, 64, IPPROTO_ICMP, self.meu_endereco, src_addr)
+                
+                # Atributos do cabeçalho ICMP (4 atributos)
+                # https://en.wikipedia.org/wiki/Internet_Control_Message_Protocol#Header
+                
+                type = 11 # Time exceeded
+                code = 0
+                checksum = 0 # Será calculado depois de montar o cabeçalho
+                unused = 0
+                rest = datagrama[:28] # 28 bytes do datagrama original
+                
+                # Montando o cabeçalho ICMP para calcular o checksum
+                cabecalho_icmp = struct.pack('!BBHHH',
+                                type, code, checksum, unused, 0)
+                
+                checksum = calc_checksum(cabecalho_icmp + cabecalho_ip)
+                
+                # Montando o cabeçalho ICMP com o checksum correto
+                cabecalho_icmp = struct.pack('!BBHHH',
+                                type, code, checksum, unused, 0)
+                
+                self.enlace.enviar(cabecalho_ip + cabecalho_icmp + rest, next_hop)
+                
                 return
     
             # Monta o cabeçalho IP com o TTL decrementado
-            cabecalho = self.montar_cabecalho(20 + len(datagrama), ttl, src_addr, dst_addr)
+            cabecalho = self.montar_cabecalho(20 + len(datagrama), ttl, 6, src_addr, dst_addr)
             
             # Monta o datagrama com o cabeçalho IP e o payload
             datagrama = cabecalho + payload
