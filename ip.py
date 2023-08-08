@@ -78,4 +78,39 @@ class IP:
         next_hop = self._next_hop(dest_addr)
         # TODO: Assumindo que a camada superior é o protocolo TCP, monte o
         # datagrama com o cabeçalho IP, contendo como payload o segmento.
-        self.enlace.enviar(segmento, next_hop)
+        
+        # Atributos do cabeçalho IP (13 atributos)
+        # https://en.wikipedia.org/wiki/Internet_Protocol_version_4#Header
+        
+        version = 4 # IPv4
+        ihl = 5 # 5 palavras de 32 bits
+        dscp = 0
+        ecn = 0 
+        total_len = 20 + len(segmento) # Tamanho total do datagrama
+        identification = 0
+        flags = 0
+        frag_offset = 0
+        ttl = 64
+        proto = 6
+        checksum = 0 # Será calculado depois de montar o cabeçalho
+        
+        src_addr = ipaddress.IPv4Address(self.meu_endereco) # Endereço de origem
+        dst_addr = ipaddress.IPv4Address(dest_addr) # Endereço de destino
+        
+        # Montando o cabeçalho IP para calcular o checksum
+        cabecalho = struct.pack('!BBHHHBBHII',
+                        (version << 4) + ihl, (dscp << 2) + ecn, total_len, identification, (flags << 13) + frag_offset,
+                        ttl, proto, checksum, int(src_addr), int(dst_addr))
+        
+        checksum = calc_checksum(cabecalho)
+        
+        # Montando o cabeçalho IP com o checksum correto
+        cabecalho = struct.pack('!BBHHHBBHII',
+                        (version << 4) + ihl, (dscp << 2) + ecn, total_len, identification, (flags << 13) + frag_offset,
+                        ttl, proto, checksum, int(src_addr), int(dst_addr))
+        
+        
+        
+        datagrama = cabecalho + segmento 
+        
+        self.enlace.enviar(datagrama, next_hop)
